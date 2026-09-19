@@ -34,7 +34,9 @@
         >
           <span class="ind-icon">{{ ind.icon }}</span>
           <span>{{ ind.label }}</span>
-          <span class="ind-count">{{ ind.count }}</span>
+          <span class="ind-count" :class="{ 'is-empty': ind.count === 0 }">
+            {{ ind.count === 0 ? '暂无' : ind.count }}
+          </span>
         </button>
       </div>
     </section>
@@ -48,6 +50,7 @@
           </span>
           <h2 class="section-header__title">
             {{ activeIndustry ? getIndustryLabel(activeIndustry) + '案例' : '全部案例' }}
+            <span class="section-header__count">（{{ filteredCases.length }} 条）</span>
           </h2>
           <p class="section-header__desc">探索我们为客户创造的价值</p>
         </div>
@@ -94,7 +97,12 @@
           </div>
         </div>
 
-        <el-empty v-if="!loading && filteredCases.length === 0" description="暂无相关案例" />
+        <el-empty
+          v-if="!loading && filteredCases.length === 0"
+          :description="activeIndustry
+            ? `${getIndustryLabel(activeIndustry)}行业当前还没有案例，敬请期待`
+            : '当前还没有案例'"
+        />
       </div>
     </section>
 
@@ -282,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import type { CaseItem, ConsultationForm } from '@/types'
 
@@ -290,19 +298,38 @@ const loading = ref(false)
 const detailVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance>()
-const activeIndustry = ref('')
 const currentCase = ref<CaseItem | null>(null)
 const selectedCase = ref<CaseItem | null>(null)
 
-const industries = [
-  { label: '全部行业', value: '', icon: '🏢', count: 24 },
-  { label: '金融科技', value: '金融科技', icon: '💰', count: 6 },
-  { label: '电商零售', value: '电商零售', icon: '🛒', count: 5 },
-  { label: '教育培训', value: '教育培训', icon: '📚', count: 4 },
-  { label: '医疗健康', value: '医疗健康', icon: '🏥', count: 3 },
-  { label: '智能制造', value: '智能制造', icon: '🏭', count: 3 },
-  { label: '文化传媒', value: '文化传媒', icon: '🎬', count: 3 }
+// 行业选项（顺序即标签排列顺序，保持不变）
+interface IndustryOption {
+  label: string
+  value: string
+  icon: string
+}
+
+const INDUSTRY_STORAGE_KEY = 'cases-active-industry'
+const industryOptions: IndustryOption[] = [
+  { label: '全部行业', value: '', icon: '🏢' },
+  { label: '金融科技', value: '金融科技', icon: '💰' },
+  { label: '电商零售', value: '电商零售', icon: '🛒' },
+  { label: '教育培训', value: '教育培训', icon: '📚' },
+  { label: '医疗健康', value: '医疗健康', icon: '🏥' },
+  { label: '智能制造', value: '智能制造', icon: '🏭' },
+  { label: '文化传媒', value: '文化传媒', icon: '🎬' }
 ]
+
+// 重新打开页面时恢复上次选中的行业（无效值回退到全部行业）
+const getStoredIndustry = (): string => {
+  const stored = localStorage.getItem(INDUSTRY_STORAGE_KEY) ?? ''
+  return industryOptions.some(i => i.value === stored) ? stored : ''
+}
+
+const activeIndustry = ref(getStoredIndustry())
+
+watch(activeIndustry, (value) => {
+  localStorage.setItem(INDUSTRY_STORAGE_KEY, value)
+})
 
 const stats = [
   { icon: '🏆', value: '200+', label: '成功案例' },
@@ -526,6 +553,16 @@ const filteredCases = computed(() => {
   return cases.value.filter(c => c.industry === activeIndustry.value)
 })
 
+// 行业标签条数按真实案例统计；「全部行业」为案例总数
+const industries = computed(() =>
+  industryOptions.map(ind => ({
+    ...ind,
+    count: ind.value
+      ? cases.value.filter(c => c.industry === ind.value).length
+      : cases.value.length
+  }))
+)
+
 const formData = reactive<ConsultationForm>({
   name: '',
   email: '',
@@ -560,7 +597,7 @@ const formRules: FormRules = {
 }
 
 const getIndustryLabel = (value: string) => {
-  const ind = industries.find(i => i.value === value)
+  const ind = industries.value.find(i => i.value === value)
   return ind ? ind.label : ''
 }
 
@@ -795,6 +832,10 @@ onMounted(() => {
     background: rgba(0, 0, 0, 0.05);
     border-radius: $border-radius-full;
     font-size: $font-size-xs;
+
+    &.is-empty {
+      color: $text-color-placeholder;
+    }
   }
 
   &:hover {
@@ -848,6 +889,12 @@ onMounted(() => {
     font-size: clamp(28px, 4vw, $font-size-3xl);
     font-weight: 700;
     margin-bottom: $spacing-sm;
+  }
+
+  &__count {
+    font-size: $font-size-lg;
+    font-weight: 500;
+    color: $text-color-secondary;
   }
 
   &__desc {
