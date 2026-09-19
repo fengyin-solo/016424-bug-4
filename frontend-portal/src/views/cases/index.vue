@@ -48,6 +48,7 @@
           </span>
           <h2 class="section-header__title">
             {{ activeIndustry ? getIndustryLabel(activeIndustry) + '案例' : '全部案例' }}
+            <span class="title-count">（{{ filteredCases.length }}）</span>
           </h2>
           <p class="section-header__desc">探索我们为客户创造的价值</p>
         </div>
@@ -94,7 +95,7 @@
           </div>
         </div>
 
-        <el-empty v-if="!loading && filteredCases.length === 0" description="暂无相关案例" />
+        <el-empty v-if="!loading && filteredCases.length === 0" :description="emptyDescription" />
       </div>
     </section>
 
@@ -294,14 +295,15 @@ const activeIndustry = ref('')
 const currentCase = ref<CaseItem | null>(null)
 const selectedCase = ref<CaseItem | null>(null)
 
-const industries = [
-  { label: '全部行业', value: '', icon: '🏢', count: 24 },
-  { label: '金融科技', value: '金融科技', icon: '💰', count: 6 },
-  { label: '电商零售', value: '电商零售', icon: '🛒', count: 5 },
-  { label: '教育培训', value: '教育培训', icon: '📚', count: 4 },
-  { label: '医疗健康', value: '医疗健康', icon: '🏥', count: 3 },
-  { label: '智能制造', value: '智能制造', icon: '🏭', count: 3 },
-  { label: '文化传媒', value: '文化传媒', icon: '🎬', count: 3 }
+// 行业标签保持现有排列方式，条数根据真实案例数据计算（见下方 industries）
+const industryDefs = [
+  { label: '全部行业', value: '', icon: '🏢' },
+  { label: '金融科技', value: '金融科技', icon: '💰' },
+  { label: '电商零售', value: '电商零售', icon: '🛒' },
+  { label: '教育培训', value: '教育培训', icon: '📚' },
+  { label: '医疗健康', value: '医疗健康', icon: '🏥' },
+  { label: '智能制造', value: '智能制造', icon: '🏭' },
+  { label: '文化传媒', value: '文化传媒', icon: '🎬' }
 ]
 
 const stats = [
@@ -526,6 +528,22 @@ const filteredCases = computed(() => {
   return cases.value.filter(c => c.industry === activeIndustry.value)
 })
 
+// 各行业条数按真实案例计算，全部行业为案例总数，没有案例的行业为 0
+const industries = computed(() =>
+  industryDefs.map(ind => ({
+    ...ind,
+    count: ind.value
+      ? cases.value.filter(c => c.industry === ind.value).length
+      : cases.value.length
+  }))
+)
+
+const emptyDescription = computed(() =>
+  activeIndustry.value
+    ? `当前「${getIndustryLabel(activeIndustry.value)}」行业暂无案例`
+    : '暂无相关案例'
+)
+
 const formData = reactive<ConsultationForm>({
   name: '',
   email: '',
@@ -560,12 +578,15 @@ const formRules: FormRules = {
 }
 
 const getIndustryLabel = (value: string) => {
-  const ind = industries.find(i => i.value === value)
+  const ind = industryDefs.find(i => i.value === value)
   return ind ? ind.label : ''
 }
 
+const INDUSTRY_STORAGE_KEY = 'cases-active-industry'
+
 const handleIndustryChange = (value: string) => {
   activeIndustry.value = value
+  localStorage.setItem(INDUSTRY_STORAGE_KEY, value)
 }
 
 const showCaseDetail = (caseItem: CaseItem) => {
@@ -608,6 +629,11 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
+  // 恢复上次选中的行业，保证重新打开页面时选中行业与条数一致
+  const savedIndustry = localStorage.getItem(INDUSTRY_STORAGE_KEY)
+  if (savedIndustry && industryDefs.some(ind => ind.value === savedIndustry)) {
+    activeIndustry.value = savedIndustry
+  }
   loading.value = true
   setTimeout(() => {
     loading.value = false
@@ -848,6 +874,12 @@ onMounted(() => {
     font-size: clamp(28px, 4vw, $font-size-3xl);
     font-weight: 700;
     margin-bottom: $spacing-sm;
+
+    .title-count {
+      font-size: 0.6em;
+      font-weight: 500;
+      color: $text-color-secondary;
+    }
   }
 
   &__desc {
